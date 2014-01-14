@@ -3,17 +3,17 @@
 var expect = require('chai').expect;
 var replier = require('../');
 
-replier.listen(9998/*).on('listening'*/, function () {
+replier.server().on('listening', function () { console.log('listening')
     send('abc');
 
 }).on('message', function (data, reply) { console.log('message')
     reply(data);
 
-});
+}).listen(9998);
 
 
 function send (msg) {
-    var client = replier.connect(9998)
+    var client = replier.client()
     .on('connect', function () {
         client.send(msg, function () {
             console.log(arguments);
@@ -21,7 +21,8 @@ function send (msg) {
     })
     .on('error', function () {
         console.log('err', arguments);
-    });
+    })
+    .connect(9998);
 }
 
 // send('abc');

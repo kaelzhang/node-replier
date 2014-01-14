@@ -1,6 +1,46 @@
 'use strict';
 
 var replier = exports;
+replier.Server = Server;
+replier.Client = Client;
+
+replier.server = function (options, callback) {
+    return new Server(options, callback);
+};
+
+replier.client = function (options, callback) {
+    return new Client(options, callback);
+};
+
+replier._migrate_events = function (events, from, to) {
+    events.forEach(function (event) {
+        from.on(event, function () {
+            var args = [event];
+            to.emit.apply(to, args.concat.apply(args, arguments));
+        });
+    });
+};
+
+// Check if the server is alive and is a replier server
+// see [The GNU C Library - Error Reporting](http://www.chemie.fu-berlin.de/chemnet/use/info/libc/libc_2.html)
+replier.check = function (port, callback) {
+    var cb = once(callback);
+
+    var client = replier
+    .client()
+    // Check if there's no server errors
+    .on('error', function (err) {
+        cb(false);
+    })
+    .on('connect', function () {
+        // send heartbeat message
+        client.send('_heartbeat', function (err, alive) {
+            cb(!err && !!alive);
+        });
+        
+    }).connect(port);
+};
+
 
 var net = require('net');
 var util = require('util');
@@ -8,23 +48,9 @@ var EE = require('events').EventEmitter;
 
 function Server (options, callback) {
     var self = this;
-    if ( typeof options === 'number' ) {
-        options = {
-            port: options
-        };
-    } else {
-        options = options || {};
-    }
+    options = options || {};
 
     this.server = new net.Server;
-    replier._migrate_events(['listening', 'close', 'error'], this.server, this);
-
-    if ( options.port ) {
-        this.listen(options.port, function () {
-            callback && callback(self);
-        });
-    }
-
     this.server.on('connection', function (client) {
         client.on('data', function(data){
             function reply (msg){
@@ -44,15 +70,21 @@ function Server (options, callback) {
             }
         });
     });
-}
-replier.Server = Server;
+    replier._migrate_events(['listening', 'close', 'error'], this.server, this);
 
-replier._migrate_events = function (events, from, to) {
-    events.forEach(function (event) {
-        from.on(event, function () {
-            to.emit.apply(to, arguments); 
+    if ( options.port ) {
+        // set the timer, so that the 'listening' event could be binded
+        self.listen(options.port, function () {
+            callback && callback(self);
         });
-    });
+    }
+}
+
+util.inherits(Server, EE);
+
+Server.prototype.listen = function(handle, callback) {
+    this.server.listen(handle, callback);
+    return this;
 };
 
 
@@ -63,45 +95,30 @@ replier._migrate_events = function (events, from, to) {
 // - retry_timeout: {number} default to `100` ms
 function Client (options, callback) {
     var self = this;
-    if ( typeof options === 'number' ) {
-        options = {
-            port: options
-        };
-    } else {
-        options = options || {};
-    }
+    options = options || {};
 
     this.socket = new net.Socket(options);
-    replier._migrate_events(['connect', 'error', 'end', 'timeout', 'close', 'drain'], this.socket, this);
-
-    if ( options.port ) {
-        this.connect(options.port, function () {
-            callback && callback(self);
-        });
-    }
+    replier._migrate_events(['connect', 'error', 'end', 'data', 'timeout', 'close', 'drain'], this.socket, this);
 }
-replier.Client = Client;
+
+util.inherits(Client, EE);
 
 
-replier.listen = function (options, callback) {
-    return new Server(options, callback);
-};
+Client.prototype.connect = function(port, callback) {
+    var self = this;
 
+    this.socket.connect(port, function (err) {
+        if ( err ) {
+            self.emit('error', err);
+        } else {
+            self.emit('open');
+        }
+        callback && callback(err);
+    });
 
-replier.connect = function (options, callback) {
-    return new Client(options, callback);
-};
-
-
-util.inherits(Server, EE);
-
-Server.prototype.listen = function(handle, callback) {
-    this.server.listen(handle, callback);
     return this;
 };
 
-
-util.inherits(Client, EE);
 
 // Send data to the server
 Client.prototype.send = function(data, callback) {
@@ -131,44 +148,6 @@ Client.prototype._decode = function(data, callback) {
     }
 
     callback(error, data);
-};
-
-
-Client.prototype.connect = function(port, callback) {
-    var self = this;
-
-    this.socket.connect(port, function (err) {
-        if ( err ) {
-            self.emit('error', err);
-        } else {
-            self.emit('open');
-        }
-
-        callback && callback(err);
-    });
-
-    return this;
-};
-
-
-// Check if the server is alive and is a replier server
-// see [The GNU C Library - Error Reporting](http://www.chemie.fu-berlin.de/chemnet/use/info/libc/libc_2.html)
-replier.check = function (port, callback) {
-    var cb = once(callback);
-
-    replier.connect({
-        port: port
-
-    }, function (client) {
-        // send heartbeat message
-        client.send('_heartbeat', function (err, alive) {
-            cb(!err && !!alive);
-        });
-    
-    // Check if there's no server errors
-    }).on('error', function (err) {
-        cb(false);
-    });
 };
 
 
