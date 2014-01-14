@@ -24,8 +24,15 @@ replier._migrate_events = function (events, from, to) {
 // Check if the server is alive and is a replier server
 // see [The GNU C Library - Error Reporting](http://www.chemie.fu-berlin.de/chemnet/use/info/libc/libc_2.html)
 replier.check = function (port, callback) {
-    var cb = once(callback);
+    function cb (alive) {
+        if ( !no ) {
+            no = true;
+            callback(alive);
+            client.end();
+        }
+    }
 
+    var no;
     var client = replier
     .client()
     // Check if there's no server errors
@@ -129,6 +136,12 @@ Client.prototype.send = function(data, callback) {
         self._decode(data, callback);
     });
 
+    return this;
+};
+
+
+Client.prototype.end = function(callback) {
+    this.socket.end(callback);
     return this;
 };
 
