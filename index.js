@@ -8,13 +8,20 @@ var EE = require('events').EventEmitter;
 
 function Server (options, callback) {
     var self = this;
+    if ( typeof options === 'number' ) {
+        options = {
+            port: options
+        };
+    } else {
+        options = options || {};
+    }
 
-    options = options || {};
-    this.server = new net.Server(options);
+    this.server = new net.Server;
+    replier._migrate_events(['listening', 'close', 'error'], this.server, this);
 
     if ( options.port ) {
         this.listen(options.port, function () {
-            callback(self);
+            callback && callback(self);
         });
     }
 
@@ -40,6 +47,14 @@ function Server (options, callback) {
 }
 replier.Server = Server;
 
+replier._migrate_events = function (events, from, to) {
+    events.forEach(function (event) {
+        from.on(event, function () {
+            to.emit.apply(to, arguments); 
+        });
+    });
+};
+
 
 // - retry {number}
 //      - 0: no retries, default
@@ -48,16 +63,20 @@ replier.Server = Server;
 // - retry_timeout: {number} default to `100` ms
 function Client (options, callback) {
     var self = this;
+    if ( typeof options === 'number' ) {
+        options = {
+            port: options
+        };
+    } else {
+        options = options || {};
+    }
 
-    options = options || {};
     this.socket = new net.Socket(options);
-    this.socket.on('error', function (err) {
-        self.emit('error', err);
-    });
+    replier._migrate_events(['connect', 'error', 'end', 'timeout', 'close', 'drain'], this.socket, this);
 
     if ( options.port ) {
         this.connect(options.port, function () {
-            callback(self);
+            callback && callback(self);
         });
     }
 }
@@ -141,10 +160,12 @@ replier.check = function (port, callback) {
         port: port
 
     }, function (client) {
+        // send heartbeat message
         client.send('_heartbeat', function (err, alive) {
             cb(!err && !!alive);
         });
     
+    // Check if there's no server errors
     }).on('error', function (err) {
         cb(false);
     });
