@@ -35,7 +35,11 @@ var server = replier.server().on('message', function(msg, reply){
 	reply(err, result);
 
 }).listen(port);
+```
 
+client:
+
+```js
 var client = replier.client().connect(port, function(err){
     client.send({
         action: 'sum',
@@ -58,8 +62,7 @@ var client = replier.client().connect(port, function(err){
 Checks if there's already a server listening to the given `port`.
 
 - port `Number`
-- callback(err, alive) `Function`
-	- err `Error Object` server error, see [The GNU C Library - Error Reporting](http://www.chemie.fu-berlin.de/chemnet/use/info/libc/libc_2.html) for details
+- callback(alive) `Function`
 	- alive `Boolean` true, if the server is alive.
 
 ## replier.server([options], [callback])
@@ -121,7 +124,7 @@ Emitted when an error occurs. The 'close' event will be called directly followin
 
 - port `Number`
 - callback(err) `Function`
-	- err `Error Object`
+	- err `Error Object` server error, see [The GNU C Library - Error Reporting](http://www.chemie.fu-berlin.de/chemnet/use/info/libc/libc_2.html) for details
 	
 Connects the client to the server. 
 
