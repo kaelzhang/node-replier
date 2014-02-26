@@ -53,6 +53,9 @@ var net = require('net');
 var util = require('util');
 var EE = require('events').EventEmitter;
 
+// `socket.setNoDelay()` doesn't even work,
+// so we use a delimiter to split each chunk into slices.
+var CHUNK_DELIMITER = '\n';
 
 // @constructor
 // Create a socket server
@@ -64,42 +67,17 @@ function Server (options, callback) {
 
     this.server = new net.Server;
     this.server.on('connection', function (client) {
+        client.setNoDelay(true);
         client.on('data', function(data){
-            function reply (err, msg){
-                client.write(
-                    JSON.stringify({
-                        err: err,
-                        msg: msg,
-                        mid: message_id
-                    })
-                );
-            }
-
-            // data is a stream
-            data = JSON.parse(data.toString());
-
-            var message_id = data.mid;
-            var message = data.msg;
-
-            if ( message === '_heartbeat' ) {
-                reply(null, {
-                    alive: true
-                });
-
-            } else {
-                self.emit('message', message, reply);
-            }
+            self._splitData(data, client);
         });
     });
     replier._migrate_events(['listening', 'close', 'error'], this.server, this);
 
     if ( options.port ) {
-        // set the timer, so that the 'listening' event could be binded
-        // setImmediate(function () {
-            self.listen(options.port, function () {
-                callback && callback(self);
-            });
-        // });
+        self.listen(options.port, function () {
+            callback && callback(self);
+        });
     }
 }
 
@@ -111,12 +89,60 @@ Server.prototype.listen = function(handle, callback) {
 };
 
 
+Server.prototype._clientOnData = function(data, client) {
+    function reply (err, msg){
+        client.write(
+            JSON.stringify({
+                err: err,
+                msg: msg,
+                mid: message_id
+            })
+        );
+    }
+
+    // data is a stream
+    try {
+        data = JSON.parse(data.toString());
+    } catch(e) {
+        // fail silently.
+        return;
+    }
+
+    var message_id = data.mid;
+    var message = data.msg;
+
+    if ( message === '_heartbeat' ) {
+        reply(null, {
+            alive: true
+        });
+
+    } else {
+        this.emit('message', message, reply);
+    }
+};
+
+
+Server.prototype._splitData = function(data, client) {
+    data = data.toString();
+
+    if ( !data ) {
+        return;
+    }
+
+    data.split(CHUNK_DELIMITER).forEach(function (slice) {
+        if ( slice ) {
+            this._clientOnData(slice, client); 
+        }
+    }, this);
+};
+
+
 // - retry {number}
 //      - 0: no retries, default
 //      - >0: max retry times
 //      - -1: no limit
 // - retry_timeout: {number} default to `100` ms
-function Client (options, callback) {
+function Client (options) {
     var self = this;
     options = options || {};
 
@@ -153,7 +179,6 @@ Client.prototype.connect = function(port, callback) {
 
 // Send data to the server
 Client.prototype.send = function(msg, callback) {
-    var self = this;
     var mid = this._messageId();
     var data = JSON.stringify({
         msg: msg,
@@ -161,7 +186,7 @@ Client.prototype.send = function(msg, callback) {
     });
 
     this._registerResponse(mid, callback);
-    this.socket.write(data);
+    this.socket.write(data + CHUNK_DELIMITER);
 
     return this;
 };
@@ -186,10 +211,10 @@ Client.prototype._dealServerData = function(data) {
     }
 
     var callback = this.callbacks[mid];
-    delete this.calbacks[mid];
+    delete this.callbacks[mid];
 
     if ( callback ) {
-        callback(err || null, msg);
+        callback(error || null, msg);
     }
 };
 
