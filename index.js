@@ -4,12 +4,12 @@ var replier = exports;
 replier.Server = Server;
 replier.Client = Client;
 
-replier.server = function (options, callback) {
-    return new Server(options, callback);
+replier.server = function (options) {
+    return new Server(options);
 };
 
-replier.client = function (options, callback) {
-    return new Client(options, callback);
+replier.client = function (options) {
+    return new Client(options);
 };
 
 replier._migrate_events = function (events, from, to) {
@@ -61,7 +61,7 @@ var CHUNK_DELIMITER = '\n';
 // Create a socket server
 // @param {Object} options
 // - port {number}
-function Server (options, callback) {
+function Server (options) {
     var self = this;
     options = options || {};
 
@@ -73,12 +73,6 @@ function Server (options, callback) {
         });
     });
     replier._migrate_events(['listening', 'close', 'error'], this.server, this);
-
-    if ( options.port ) {
-        self.listen(options.port, function () {
-            callback && callback(self);
-        });
-    }
 }
 
 util.inherits(Server, EE);
