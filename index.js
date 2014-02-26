@@ -53,6 +53,11 @@ var net = require('net');
 var util = require('util');
 var EE = require('events').EventEmitter;
 
+
+// @constructor
+// Create a socket server
+// @param {Object} options
+// - port {number}
 function Server (options, callback) {
     var self = this;
     options = options || {};
@@ -60,20 +65,29 @@ function Server (options, callback) {
     this.server = new net.Server;
     this.server.on('connection', function (client) {
         client.on('data', function(data){
-            function reply (msg){
-                client.write( JSON.stringify(msg) );
+            function reply (err, msg){
+                client.write(
+                    JSON.stringify({
+                        err: err,
+                        msg: msg,
+                        mid: message_id
+                    })
+                );
             }
 
             // data is a stream
             data = JSON.parse(data.toString());
 
-            if ( data === '_heartbeat' ) {
-                reply({
+            var message_id = data.mid;
+            var message = data.msg;
+
+            if ( message === '_heartbeat' ) {
+                reply(null, {
                     alive: true
                 });
 
             } else {
-                self.emit('message', data, reply);
+                self.emit('message', message, reply);
             }
         });
     });
@@ -81,9 +95,11 @@ function Server (options, callback) {
 
     if ( options.port ) {
         // set the timer, so that the 'listening' event could be binded
-        self.listen(options.port, function () {
-            callback && callback(self);
-        });
+        // setImmediate(function () {
+            self.listen(options.port, function () {
+                callback && callback(self);
+            });
+        // });
     }
 }
 
@@ -104,8 +120,17 @@ function Client (options, callback) {
     var self = this;
     options = options || {};
 
+    this.mid = 0;
+    this.callbacks = {};
+
     this.socket = new net.Socket(options);
-    replier._migrate_events(['connect', 'error', 'end', 'data', 'timeout', 'close', 'drain'], this.socket, this);
+    replier._migrate_events(['connect', 'error', 'end', 'timeout', 'close', 'drain'], this.socket, this);
+
+    this.socket.on('data', function (data) {
+        self.emit('data', data);
+
+        self._dealServerData(data);
+    });
 }
 
 util.inherits(Client, EE);
@@ -113,7 +138,6 @@ util.inherits(Client, EE);
 
 Client.prototype.connect = function(port, callback) {
     var self = this;
-
     this.socket.connect(port, function (err) {
         if ( err ) {
             self.emit('error', err);
@@ -128,49 +152,56 @@ Client.prototype.connect = function(port, callback) {
 
 
 // Send data to the server
-Client.prototype.send = function(data, callback) {
-    this.socket.write( JSON.stringify(data) );
-
+Client.prototype.send = function(msg, callback) {
     var self = this;
-    this.socket.once('data', function (data) {
-        self._decode(data, callback);
+    var mid = this._messageId();
+    var data = JSON.stringify({
+        msg: msg,
+        mid: mid
     });
 
+    this._registerResponse(mid, callback);
+    this.socket.write(data);
+
     return this;
 };
 
 
-Client.prototype.end = function(callback) {
-    this.socket.end(callback);
-    return this;
+Client.prototype._registerResponse = function(id, callback) {
+    this.callbacks[id] = callback;
 };
 
 
-// Data will transfer with the form of Stream
-Client.prototype._decode = function(data, callback) {
+Client.prototype._dealServerData = function(data) {
     data = JSON.parse(data);
 
-    var error = null;
+    var error;
+    var msg;
+    var mid;
 
     if ( data ){
-        if (data.error ) {
-            error = data.error;
-        }
-
-        delete data.error;
+        error = data.err;
+        msg = data.msg;
+        mid = data.mid;
     }
 
-    callback(error, data);
+    var callback = this.callbacks[mid];
+    delete this.calbacks[mid];
+
+    if ( callback ) {
+        callback(err || null, msg);
+    }
 };
 
 
-function once (fn, context) {
-    var no;
-    return function () {
-        if ( !no ) {
-            no = true;
-            return fn && fn.apply(context || null, arguments);
-        }
-    };
-}
+Client.prototype._messageId = function() {
+    return ++ this.mid;
+};
+
+
+
+Client.prototype.end = function() {
+    this.socket.end.apply(this.socket, arguments);
+    return this;
+};
 
