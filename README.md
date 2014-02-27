@@ -65,7 +65,7 @@ Checks if there's already a server listening to the given `port`.
 - callback(alive) `Function`
 	- alive `Boolean` true, if the server is alive.
 
-## replier.server([options], [callback])
+## replier.server()
 
 Creates and returns a replier server object which is an instance of `replier.Server`.
 
@@ -81,10 +81,8 @@ The code above is relevant to:
 replier.server().listen(9000, callback);
 ```
 
-## Class: replier.Server(options)
+## Class: replier.Server
 
-- options `Object`
-	- port `Number` 
 	
 ### server.listen(port, [callback]);
 
@@ -114,7 +112,7 @@ Emitted when the server closes. Note that if connections exist, this event is no
 Emitted when an error occurs. The 'close' event will be called directly following this event. See example in discussion of server.listen.
 
 
-## replier.client([options], [callback])
+## replier.client([options])
 
 ## Class: replier.Client([options])
 

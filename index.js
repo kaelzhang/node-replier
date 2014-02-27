@@ -61,9 +61,8 @@ var CHUNK_DELIMITER = '\n';
 // Create a socket server
 // @param {Object} options
 // - port {number}
-function Server (options) {
+function Server () {
     var self = this;
-    options = options || {};
 
     this.server = new net.Server;
     this.server.on('connection', function (client) {
