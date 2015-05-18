@@ -55,23 +55,43 @@ var EE = require('events').EventEmitter;
 
 function dealStream(data, callback){
     data = data.toString('utf-8');
-    if(data.indexOf(CHUNK_DELIMITER) == -1) {
+    function done(msg){
+        if(msg){
+            callback(msg);
+        }
+    }
+    if ( !data ) {
+        return;
+    }
+
+    if(data.indexOf(CHUNK_DELIMITER) == -1 && Buffer.byteLength(data, 'utf8') >= CHUNK_BUFFER_SIZE) {
+        buf = new Buffer(CHUNK_BUFFER_SIZE)
         buf.write(data.toString()); // write data to buffer
     } else {
         var parts = data.split(CHUNK_DELIMITER);
         var msg;
+
+        if(!buf || !buf.length){
+            return parts.forEach(done);
+        }
+
         if (parts.length == 2) {
             msg = buf.toString() + parts[0]; // and do something with message
-            callback(msg);
-            buf = (new Buffer(CHUNK_BUFFER_SIZE));
-            buf.write(parts[1]); // write new, incomplete data to buffer
+            done(msg);
+
+            if(parts[1]){
+                buf = (new Buffer(CHUNK_BUFFER_SIZE));
+                buf.write(parts[1]); // write new, incomplete data to buffer    
+            }else{
+                buf = null;
+            }
         } else {
             msg = buf.toString() + parts[0];
-            callback(msg);
+            done(msg);
             for (var i = 1; i <= parts.length -1; i++) {
                 if (i !== parts.length-1) {
                     msg = parts[i];
-                    callback(msg);
+                    done(msg);
                 } else {
                     buf.write(parts[i]);
                 }
@@ -85,7 +105,7 @@ function dealStream(data, callback){
 // so we use a delimiter to split each chunk into slices.
 var CHUNK_DELIMITER = '\n';
 var CHUNK_BUFFER_SIZE = Math.pow(2,16);
-var buf = new Buffer(CHUNK_BUFFER_SIZE);
+var buf;
 // @constructor
 // Create a socket server
 // @param {Object} options

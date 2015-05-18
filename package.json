@@ -28,9 +28,9 @@
     "url": "https://github.com/kaelzhang/node-replier/issues"
   },
   "devDependencies": {
-    "mocha": "~1.13.0",
-    "chai": "~1.8.0"
+    "async": "^0.9.0",
+    "chai": "~1.8.0",
+    "mocha": "~1.13.0"
   },
-  "dependencies": {
-  }
+  "dependencies": {}
 }
