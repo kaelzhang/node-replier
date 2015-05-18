@@ -35,6 +35,7 @@ describe("basic usage", function(){
         for(var i=0; i < arrayLength; i++){
             array.push({timestamp:+ new Date()});
         }
+        
         fs.writeFileSync(path.join(__dirname, '/fixture/longarray.js'), JSON.stringify(array));
     });
 
