@@ -29,7 +29,8 @@ describe("replier.check()", function(){
 
 
 describe("basic usage", function(){
-    var arrayLength = 2500;
+    this.timeout(3000);
+    var arrayLength = 50000;
     beforeEach(function(){
         var array = [];
         for(var i=0; i < arrayLength; i++){

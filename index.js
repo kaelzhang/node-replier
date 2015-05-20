@@ -64,7 +64,7 @@ function dealStream(data, callback){
         return;
     }
 
-    if(data.indexOf(CHUNK_DELIMITER) == -1 && Buffer.byteLength(data, 'utf8') >= CHUNK_BUFFER_SIZE) {
+    if(data.indexOf(CHUNK_DELIMITER) == -1) {
         if(!buf){
             buf = new BufferHelper();
         }
@@ -89,7 +89,8 @@ function dealStream(data, callback){
                 buf = null;
             }
         } else {
-            msg = buf.toString() + parts[0];
+            buf.concat(new Buffer(parts[0]));
+            msg = buf.toBuffer().toString(); // and do something with message
             done(msg);
             for (var i = 1; i <= parts.length -1; i++) {
                 if (i !== parts.length-1) {
@@ -143,7 +144,7 @@ Server.prototype._clientOnData = function(data, client) {
                 err: err,
                 msg: msg,
                 mid: message_id
-            })
+            }) + CHUNK_DELIMITER
         );
     }
 
