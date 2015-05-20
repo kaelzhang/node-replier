@@ -1,5 +1,5 @@
 'use strict';
-
+var BufferHelper = require('bufferhelper');
 var replier = exports;
 replier.Server = Server;
 replier.Client = Client;
@@ -65,23 +65,26 @@ function dealStream(data, callback){
     }
 
     if(data.indexOf(CHUNK_DELIMITER) == -1 && Buffer.byteLength(data, 'utf8') >= CHUNK_BUFFER_SIZE) {
-        buf = new Buffer(CHUNK_BUFFER_SIZE)
-        buf.write(data.toString()); // write data to buffer
+        if(!buf){
+            buf = new BufferHelper();
+        }
+        buf.concat(new Buffer(data)); // write data to buffer
     } else {
         var parts = data.split(CHUNK_DELIMITER);
         var msg;
 
-        if(!buf || !buf.length){
+        if(!buf || !buf.buffers.length){
             return parts.forEach(done);
         }
 
         if (parts.length == 2) {
-            msg = buf.toString() + parts[0]; // and do something with message
+            buf.concat(new Buffer(parts[0]));
+            msg = buf.toBuffer().toString(); // and do something with message
             done(msg);
 
             if(parts[1]){
-                buf = (new Buffer(CHUNK_BUFFER_SIZE));
-                buf.write(parts[1]); // write new, incomplete data to buffer    
+                buf = new BufferHelper();;
+                buf.concat(new Buffer(parts[1])); // write new, incomplete data to buffer
             }else{
                 buf = null;
             }
@@ -93,7 +96,7 @@ function dealStream(data, callback){
                     msg = parts[i];
                     done(msg);
                 } else {
-                    buf.write(parts[i]);
+                    buf.concat(new Buffer(parts[i]));
                 }
             }
         }
