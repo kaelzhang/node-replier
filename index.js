@@ -1,5 +1,5 @@
 'use strict';
-
+var BufferHelper = require('bufferhelper');
 var replier = exports;
 replier.Server = Server;
 replier.Client = Client;
@@ -53,10 +53,63 @@ var net = require('net');
 var util = require('util');
 var EE = require('events').EventEmitter;
 
+function dealStream(data, callback){
+    data = data.toString('utf-8');
+    function done(msg){
+        if(msg){
+            callback(msg);
+        }
+    }
+    if ( !data ) {
+        return;
+    }
+
+    if(data.indexOf(CHUNK_DELIMITER) == -1) {
+        if(!buf){
+            buf = new BufferHelper();
+        }
+        buf.concat(new Buffer(data)); // write data to buffer
+    } else {
+        var parts = data.split(CHUNK_DELIMITER);
+        var msg;
+
+        if(!buf || !buf.buffers.length){
+            return parts.forEach(done);
+        }
+
+        if (parts.length == 2) {
+            buf.concat(new Buffer(parts[0]));
+            msg = buf.toBuffer().toString(); // and do something with message
+            done(msg);
+
+            if(parts[1]){
+                buf = new BufferHelper();;
+                buf.concat(new Buffer(parts[1])); // write new, incomplete data to buffer
+            }else{
+                buf = null;
+            }
+        } else {
+            buf.concat(new Buffer(parts[0]));
+            msg = buf.toBuffer().toString(); // and do something with message
+            done(msg);
+            for (var i = 1; i <= parts.length -1; i++) {
+                if (i !== parts.length-1) {
+                    msg = parts[i];
+                    done(msg);
+                } else {
+                    buf.concat(new Buffer(parts[i]));
+                }
+            }
+        }
+    }
+}
+
+
 // `socket.setNoDelay()` doesn't even work,
 // so we use a delimiter to split each chunk into slices.
 var CHUNK_DELIMITER = '\n';
-
+var CHUNK_BUFFER_SIZE = Math.pow(2,16);
+var buf;
 // @constructor
 // Create a socket server
 // @param {Object} options
@@ -68,7 +121,9 @@ function Server () {
     this.server.on('connection', function (client) {
         client.setNoDelay(true);
         client.on('data', function(data){
-            self._splitData(data, client);
+            dealStream(data, function(msg){
+                self._clientOnData(msg, client);
+            });
         });
     });
     replier._migrate_events(['listening', 'close', 'error'], this.server, this);
@@ -89,7 +144,7 @@ Server.prototype._clientOnData = function(data, client) {
                 err: err,
                 msg: msg,
                 mid: message_id
-            })
+            }) + CHUNK_DELIMITER
         );
     }
 
@@ -97,6 +152,7 @@ Server.prototype._clientOnData = function(data, client) {
     try {
         data = JSON.parse(data.toString());
     } catch(e) {
+        this.emit('error', e);
         // fail silently.
         return;
     }
@@ -115,19 +171,6 @@ Server.prototype._clientOnData = function(data, client) {
 };
 
 
-Server.prototype._splitData = function(data, client) {
-    data = data.toString();
-
-    if ( !data ) {
-        return;
-    }
-
-    data.split(CHUNK_DELIMITER).forEach(function (slice) {
-        if ( slice ) {
-            this._clientOnData(slice, client); 
-        }
-    }, this);
-};
 
 
 // - retry {number}
@@ -146,9 +189,10 @@ function Client (options) {
     replier._migrate_events(['connect', 'error', 'end', 'timeout', 'close', 'drain'], this.socket, this);
 
     this.socket.on('data', function (data) {
-        self.emit('data', data);
-
-        self._dealServerData(data);
+        dealStream(data, function(msg){
+            self.emit('data', msg);
+            self._dealServerData(msg);
+        });
     });
 }
 

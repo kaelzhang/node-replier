@@ -1,6 +1,6 @@
 # php files
 index.php
-
+test/fixture/*.js
 # Numerous always-ignore extensions
 *.bak
 *.patch
